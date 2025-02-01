@@ -1,17 +1,11 @@
+import { PrismaClient } from "@prisma/client";
 import { ApolloServer, gql } from "apollo-server";
 
-const todos = [
-	{
-		id: "1",
-		title: "Learn GraphQL",
-		completed: false,
-	},
-	{
-		id: "2",
-		title: "Learn TypeScript",
-		completed: false,
-	},
-];
+const prisma = new PrismaClient();
+
+type Context = {
+	prisma: PrismaClient;
+};
 
 const typeDefs = gql`
   type Todo {
@@ -33,36 +27,33 @@ const typeDefs = gql`
 
 const resolvers = {
 	Query: {
-		getTodos: () => todos,
+		getTodos: async (_: unknown, args: unknown, context: Context) => {
+			return await context.prisma.todo.findMany();
+		},
 	},
 	Mutation: {
-		addTodo: (_: unknown, { title }: { title: string }) => {
-			const newTodo = {
-				id: String(todos.length + 1),
-				title,
-				completed: false,
-			};
-			todos.push(newTodo);
-			return newTodo;
+		addTodo: (_: unknown, { title }: { title: string }, context: Context) => {
+			return context.prisma.todo.create({
+				data: {
+					title,
+					completed: false,
+				},
+			});
 		},
 		updateTodo: (
 			_: unknown,
 			{ id, completed }: { id: string; completed: boolean },
+			context: Context,
 		) => {
-			const todo = todos.find((todo) => todo.id === id);
-			if (!todo) {
-				throw new Error(`Todo with id ${id} not found`);
-			}
-			todo.completed = completed;
-			return todo;
+			return context.prisma.todo.update({
+				where: { id },
+				data: { completed },
+			});
 		},
-		deleteTodo: (_: unknown, { id }: { id: string }) => {
-			const todo = todos.findIndex((todo) => todo.id === id);
-			if (todo === -1) {
-				throw new Error(`Todo with id ${id} not found`);
-			}
-			const deletedTodo = todos.splice(todo, 1);
-			return deletedTodo[0];
+		deleteTodo: (_: unknown, { id }: { id: string }, context: Context) => {
+			return context.prisma.todo.delete({
+				where: { id },
+			});
 		},
 	},
 };
@@ -70,6 +61,7 @@ const resolvers = {
 const server = new ApolloServer({
 	typeDefs,
 	resolvers,
+	context: () => ({ prisma }),
 });
 
 server.listen().then(({ url }) => {
